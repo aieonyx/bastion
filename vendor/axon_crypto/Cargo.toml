@@ -1,4 +1,8 @@
+# Copyright (c) 2026 Edison Lepiten / AIEONYX
 [package]
 name = "axon_crypto"
 version = "0.57.1"
 edition = "2021"
+
+[dependencies]
+rand = "0.8"
