@@ -1,0 +1,4 @@
+[package]
+name = "axon_crypto"
+version = "0.57.1"
+edition = "2021"
