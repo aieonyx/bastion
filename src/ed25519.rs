@@ -1,28 +1,33 @@
 // Copyright (c) 2026 Edison Lepiten / AIEONYX
-// BASTION v0.1 — Ed25519 signing stub
-//
-// Production: delegates to axon_crypto P57.1 (full curve math, 93 tests).
-// This stub provides the interface contract for unit testing without
-// pulling in axon_crypto as a workspace dep (BASTION is a standalone repo).
-// BASTION-STUB-ED25519-001: replace with axon_crypto::ed25519 before v1.0.
+// BASTION v0.2 — Real Ed25519 via axon_crypto (P57.1, full curve math)
+// Closes BASTION-STUB-ED25519-001
 
-pub const PUBKEY_LEN:  usize = 32;
-pub const PRIVKEY_LEN: usize = 64; // seed || public key
-pub const SIG_LEN:     usize = 64;
+use axon_crypto::ed25519::{Ed25519PublicKey, Ed25519KeyPair};
 
-/// Ed25519 public key
+pub const PUBKEY_LEN: usize = 32;
+pub const SIG_LEN:    usize = 64;
+
+/// Ed25519 public key wrapper
 #[derive(Debug, Clone, PartialEq)]
 pub struct PublicKey(pub [u8; PUBKEY_LEN]);
 
-/// Ed25519 signing key (seed || pubkey — never leaves Policy PD)
+impl PublicKey {
+    pub fn from_crypto(k: &Ed25519PublicKey) -> Self {
+        Self(k.to_bytes())
+    }
+    pub fn to_crypto(&self) -> Ed25519PublicKey {
+        Ed25519PublicKey::from_bytes(self.0)
+    }
+}
+
+/// Ed25519 signing key wrapper
 #[derive(Clone)]
-pub struct SigningKey(pub [u8; PRIVKEY_LEN]);
+pub struct SigningKey(pub [u8; 32]); // seed
 
 impl SigningKey {
     pub fn public_key(&self) -> PublicKey {
-        let mut pk = [0u8; PUBKEY_LEN];
-        pk.copy_from_slice(&self.0[PUBKEY_LEN..]);
-        PublicKey(pk)
+        let kp = Ed25519KeyPair::from_seed(self.0);
+        PublicKey::from_crypto(&kp.public_key())
     }
 }
 
@@ -32,52 +37,22 @@ impl std::fmt::Debug for SigningKey {
     }
 }
 
-/// Signature (64 bytes)
+/// Ed25519 signature (64 bytes)
 #[derive(Debug, Clone, PartialEq)]
 pub struct Signature(pub [u8; SIG_LEN]);
 
-/// Sign message with signing key.
-/// BASTION-STUB: uses SHA-256-based deterministic stub.
-/// Replace with real Ed25519 scalar multiplication before v1.0.
+/// Sign a message — delegates to axon_crypto Ed25519KeyPair::sign()
 pub fn sign(key: &SigningKey, message: &[u8]) -> Signature {
-    use crate::hash::sha256;
-    // Stub: H(privkey_seed || message) repeated to fill 64 bytes
-    // NOT cryptographically secure — stub only
-    let seed = &key.0[..PUBKEY_LEN];
-    let mut input = seed.to_vec();
-    input.extend_from_slice(message);
-    let h1 = sha256(&input);
-    let mut input2 = h1.to_vec();
-    input2.extend_from_slice(message);
-    let h2 = sha256(&input2);
-    let mut sig = [0u8; SIG_LEN];
-    sig[..32].copy_from_slice(&h1);
-    sig[32..].copy_from_slice(&h2);
-    Signature(sig)
+    let kp = Ed25519KeyPair::from_seed(key.0);
+    Signature(kp.sign(message))
 }
 
-/// Verify signature against public key and message.
-/// BASTION-STUB: re-computes stub sign and compares.
+/// Verify a signature — delegates to axon_crypto Ed25519PublicKey::verify()
 pub fn verify(pubkey: &PublicKey, message: &[u8], sig: &Signature) -> bool {
-    use crate::hash::sha256;
-    // Reconstruct the stub signing key seed from pubkey (stub-only — not real)
-    // In real Ed25519, verification uses the public key directly.
-    // Stub: H(pubkey || message) check
-    let mut input = pubkey.0.to_vec();
-    input.extend_from_slice(message);
-    let h = sha256(&input);
-    // Stub verify: first 8 bytes of sig must match first 8 bytes of H(pubkey||msg)
-    // This is NOT real Ed25519 — stub for interface testing only
-    sig.0[..8] == h[..8]
+    pubkey.to_crypto().verify(message, &sig.0)
 }
 
-/// Generate a stub keypair from a seed (32 bytes).
-/// Real: scalar multiply seed by Ed25519 basepoint.
+/// Generate a signing key from a 32-byte seed (deterministic)
 pub fn keypair_from_seed(seed: [u8; 32]) -> SigningKey {
-    use crate::hash::sha256;
-    let pk = sha256(&seed); // stub: pubkey = H(seed)
-    let mut raw = [0u8; PRIVKEY_LEN];
-    raw[..32].copy_from_slice(&seed);
-    raw[32..].copy_from_slice(&pk);
-    SigningKey(raw)
+    SigningKey(seed)
 }
