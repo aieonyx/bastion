@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Edison Lepiten / AIEONYX
 // BASTION v0.1 — Binary verifier: signature check, dev-mode rejection, policy gate
 
-use crate::manifest::{BastionManifest, ProfileTag, BASTION_MAGIC};
+use crate::manifest::BastionManifest;
 use crate::ed25519::PublicKey;
 use crate::policy_pd::PolicyPD;
 
@@ -87,7 +87,10 @@ impl<'a> BastionVerifier<'a> {
         }
 
         // 5. Signer trust
-        let pubkey = PublicKey(manifest.signer_pubkey);
+        let mut pk_arr = [0u8; crate::ed25519::PUBKEY_LEN];
+        let pk_len = manifest.signer_pubkey.len().min(crate::ed25519::PUBKEY_LEN);
+        pk_arr[..pk_len].copy_from_slice(&manifest.signer_pubkey[..pk_len]);
+        let pubkey = PublicKey(pk_arr);
         if !self.policy.is_trusted(&pubkey) {
             return VerifyResult::Rejected(RejectReason::UnknownSigner);
         }

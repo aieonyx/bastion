@@ -72,9 +72,9 @@ pub struct BastionManifest {
     /// SHA-256 of the binary content
     pub content_hash: [u8; 32],
     /// Node public key that signed this manifest
-    pub signer_pubkey: [u8; PUBKEY_LEN],
+    pub signer_pubkey: Vec<u8>,
     /// Ed25519 signature over (version|name|semver|profile|content_hash|signer_pubkey)
-    pub signature: [u8; SIG_LEN],
+    pub signature: Vec<u8>,
     /// Declared capabilities
     pub capabilities: Vec<CapabilityDecl>,
     /// Monotonic counter (replay protection)
@@ -100,14 +100,14 @@ impl BastionManifest {
             semver: semver.to_string(),
             profile,
             content_hash,
-            signer_pubkey: pubkey.0,
-            signature: [0u8; SIG_LEN],
+            signer_pubkey: pubkey.0.to_vec(),
+            signature: vec![0u8; SIG_LEN],
             capabilities,
             nonce,
         };
         let msg = m.signing_message();
         let sig = crate::ed25519::sign(signing_key, &msg);
-        m.signature = sig.0;
+        m.signature = sig.0.to_vec();
         m
     }
 
@@ -123,7 +123,7 @@ impl BastionManifest {
         msg.extend_from_slice(self.profile.as_str().as_bytes());
         msg.push(0);
         msg.extend_from_slice(&self.content_hash);
-        msg.extend_from_slice(&self.signer_pubkey);
+        msg.extend_from_slice(&self.signer_pubkey);  // Vec<u8>
         msg.extend_from_slice(&self.nonce.to_le_bytes());
         msg
     }
@@ -131,8 +131,14 @@ impl BastionManifest {
     /// Verify the manifest signature.
     pub fn verify_signature(&self) -> bool {
         let msg = self.signing_message();
-        let pubkey = PublicKey(self.signer_pubkey);
-        let sig = Signature(self.signature);
+        let mut pk = [0u8; PUBKEY_LEN];
+        let mut sg = [0u8; SIG_LEN];
+        let pk_len = self.signer_pubkey.len().min(PUBKEY_LEN);
+        let sg_len = self.signature.len().min(SIG_LEN);
+        pk[..pk_len].copy_from_slice(&self.signer_pubkey[..pk_len]);
+        sg[..sg_len].copy_from_slice(&self.signature[..sg_len]);
+        let pubkey = PublicKey(pk);
+        let sig = Signature(sg);
         crate::ed25519::verify(&pubkey, &msg, &sig)
     }
 
